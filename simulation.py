@@ -1,8 +1,8 @@
 import simpy
-import random
+import random, os
 import statistics
 import tkinter as tk
-from tkinter import PhotoImage, Toplevel, messagebox
+from tkinter import PhotoImage, Toplevel, messagebox, scrolledtext
 
 wait_times = []
 
@@ -15,6 +15,8 @@ class MainScreen(tk.Tk):
         self.bind('<Escape>', self.quitFullscreen)
         self.bind('<F11>', self.toggleFullscreen)
         self.initializeUI()
+        self.create_file()
+        self.read_file()
 
     def quitFullscreen(self, event=None):
         self.attributes('-fullscreen', False)
@@ -39,18 +41,29 @@ class MainScreen(tk.Tk):
         self.headerFrame.grid(row=0, column=0, columnspan=2, sticky="ew")
         self.headerFrame.grid_propagate()
 
+        self.bg_image_cog = PhotoImage(file="Icons/setting.png")
+        self.settings = tk.Button(self.headerFrame, command=self.openSettingsBox ,image=self.bg_image_cog, compound="center", width=24)
+        self.settings.pack(side=tk.RIGHT, padx=10, pady=10)
+
         self._title = tk.Label(self.headerFrame, text="Theater Simulation", fg="black", bg="lightblue", font=("Arial", 20))
         self._title.pack(side=tk.LEFT, padx=10, pady=10)
 
         self.mainFrame = tk.Frame(self, bg="gray")
         self.mainFrame.grid(row=1, column=0, rowspan=4, columnspan=2, sticky="nsew", padx=10, pady=10)
+        self.mainFrame.grid_columnconfigure(0, weight=1)
+        self.mainFrame.grid_columnconfigure(1, weight=1)
+        self.mainFrame.grid_rowconfigure(0, weight=1)
         self.tableFrame = tk.Frame(self.mainFrame)
         self.tableFrame.grid(row=0, column=0, sticky="nsew")
         self.suggestionFrame = tk.Frame(self.mainFrame)
         self.suggestionFrame.grid(row=0, column=1, sticky="nsew")
+        self.suggestionFrame.grid_columnconfigure(0, weight=1)
+        self.suggestionFrame.grid_rowconfigure(0, weight=1)
 
         column_names = ["Number of Cashiers", "Number of Servers", "Number of Ushers", "Total Cost","Waiting Time"]
         self.t = Table(self.tableFrame, column_names)
+        self.suggestionView = scrolledtext.ScrolledText(self.suggestionFrame)
+        self.suggestionView.grid(row=0, column=0, sticky="nsew")
 
         self.buttonFrame = tk.Frame(self)
         self.buttonFrame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
@@ -87,8 +100,52 @@ class MainScreen(tk.Tk):
         self.wait_window(suggestion_screen)
         self.suggestButton["state"] = tk.NORMAL
 
-    def update_list(self):
-        pass
+    def update_list(self, suggestions):
+        self.suggestionView["state"] = tk.NORMAL
+        self.suggestionView.insert(tk.END, suggestions)
+        self.suggestionView["state"] = tk.DISABLED
+
+    def openSettingsBox(self):
+        self.settings["state"] = tk.DISABLED
+        settings_screen = Settings(self, self.clear_tables, self.clear_suggestions)
+        self.wait_window(settings_screen)
+        self.settings["state"] = tk.NORMAL
+
+    def clear_suggestions(self):
+        self.suggestionView["state"] = tk.NORMAL
+        self.suggestionView.delete(1.0, tk.END)
+        self.suggestionView["state"] = tk.DISABLED
+
+        f = open("suggestion.txt", "a")
+        f.truncate(0)
+        f.close()
+        
+    def clear_tables(self):
+        self.t.clear_row()
+
+    def create_file(self):
+        if not os.path.exists("suggestion.txt"):
+            try:
+                suggestion_file = open('suggestion.txt', 'w')
+                suggestion_file.close()
+            except:
+                print("Error initializing file.")
+        else:
+            print("File initialized successfully.")
+
+    def read_file(self):
+        try:
+            with open("suggestion.txt", "r") as f:
+                content = f.read()
+                self.suggestionView.delete(1.0,tk.END)
+                self.suggestionView.insert(tk.END, content)
+        except FileNotFoundError:
+            self.suggestionView.insert(tk.END, "File not found.")
+        except Exception as e:
+            self.suggestionView.insert(tk.END, f"An error occured: {e}")
+
+        self.suggestionView["state"] = tk.DISABLED
+            
 
 class ControlScreen(Toplevel):
     def __init__(self,parent,update_table_callback):
@@ -248,20 +305,70 @@ class Table:
         self.frame.grid_rowconfigure(self.row_count, weight=1)
         self.row_count += 1
 
+    def clear_row(self):
+        if self.data_rows:
+            row = self.data_rows.pop()
+            row.destroy()
+            self.row_count -= 1
+            for i in range(self.row_count):
+                self.frame.grid_rowconfigure(i + 1, weight=1)
+
 class Suggestions(Toplevel):
     def __init__(self, parent, update_suggestions_callback):
         super().__init__(parent)
         self.title("Suggestions")
-        self.geometry("380x250")
+        self.geometry("400x450")
         self.resizable(False, False)
         self.update_suggestions_callback = update_suggestions_callback
         self.initUI()
 
     def initUI(self):
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
         
         self.suggestionBox = tk.Text(self)
         self.suggestionBox.grid(row=0, column=0)
+        self.suggestButton = tk.Button(self, text="Submit", command=lambda: self.append_to_file(self.suggestionBox.get("1.0", tk.END).strip()))
+        self.suggestButton.grid(row=1, column=0, sticky="nsew")
+
+    def append_to_file(self, text):
+        try:
+            with open("suggestion.txt", 'a') as f:
+                f.write(text + "\n")
+                if self.update_suggestions_callback:
+                    self.update_suggestions_callback(text + "\n")
+                self.destroy()
+        except:
+            print("Error: File not found.")
+
+class Settings(Toplevel):
+    def __init__(self,parent,update_tb_callback,update_sg_callback):
+        super().__init__(parent)
+        self.geometry("300x200")
+        self.resizable(False, False)
+        self.update_tb_callback = update_tb_callback
+        self.update_sg_callback = update_sg_callback
+        self.initializeUI()
+
+    def initializeUI(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        
+        self.clearTableButton = tk.Button(self, text="Clear Table", command=self.clear_table, border=1, width=30)
+        self.clearSuggestionButton = tk.Button(self, text="Clear Suggestion", command=self.clear_suggestions, border=1, width=30)
+        self.clearTableButton.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.clearSuggestionButton.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+    def clear_table(self):
+        if self.update_tb_callback:
+            self.update_tb_callback()
+            self.destroy()
+
+    def clear_suggestions(self):
+        if self.update_sg_callback:
+            self.update_sg_callback()
+            self.destroy()
     
 if __name__ == "__main__":
     root = MainScreen()
