@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import PhotoImage, Toplevel, messagebox, scrolledtext
 
 wait_times = []
+simps_result = []
 
 class MainScreen(tk.Tk):
     def __init__(self):
@@ -253,7 +254,8 @@ class ControlScreen(Toplevel):
         sc = self.serverCost.get()
         uc = self.usherCost.get()
         total_cost = ((int(num_cashiers) *  int(cs)) + (int(num_servers) * int(sc)) + (int(num_ushers) * int(uc)))
-        results = (num_cashiers, num_servers, num_ushers, total_cost, f"{mins} min and {secs} sec")
+        results = (str(num_cashiers), str(num_servers), str(num_ushers), str(total_cost), f"{mins} min and {secs} sec")
+        simps_result.append(results)
         wait_times.clear()
         if self.update_table_callback:
             self.update_table_callback(results)
@@ -332,14 +334,17 @@ class Suggestions(Toplevel):
         self.suggestButton.grid(row=1, column=0, sticky="nsew")
 
     def append_to_file(self, text):
-        try:
-            with open("suggestion.txt", 'a') as f:
-                f.write(text + "\n")
-                if self.update_suggestions_callback:
-                    self.update_suggestions_callback(text + "\n")
-                self.destroy()
-        except:
-            print("Error: File not found.")
+        with open("suggestion.txt", 'a') as f:
+            string = ''
+            display_str = ''
+            for simps in simps_result:
+                display_str = display_str + '-'.join(simps) + "\n"
+                string = '-'.join(simps) + "\n"
+                f.write(string)
+            f.write("Suggestion: " + text + "\n\n")
+            if self.update_suggestions_callback:
+                self.update_suggestions_callback(display_str + "Suggestion: " + text + "\n\n")
+            self.destroy()            
 
 class Settings(Toplevel):
     def __init__(self,parent,update_tb_callback,update_sg_callback):
